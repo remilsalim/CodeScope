@@ -28,10 +28,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!code.trim()) return 'JavaScript';
 
         const patterns = {
-            'HTML': /<!DOCTYPE|<html>|<\w+\s+|>|&[a-z]+;/i,
+            'Java': /\bclass\s+\w+|\bpublic\s+static\s+void\s+main|\bSystem\.out\.println/i,
+            'HTML': /<!DOCTYPE|<html>|<\w+\s+[^>]*>|&[a-z]+;/i,
             'CSS': /[a-z-]+\s*:\s*[^;]+;|[.#][\w-]+\s*\{/i,
             'Python': /def\s+[\w]+\s*\(|import\s+[\w]+|print\s*\(|if\s+[\w]+\s*:|elif\s+:|#\s+.+/i,
-            'Java': /\b(public|private|protected)\s+class\b|\bSystem\.out\.print\b|\bString\[\]\s+args\b/i,
             'C++': /#include\s+<[^>]+>|\bstd::cout\b|\bint\s+main\s*\(/i,
             'PHP': /<\?php|\$[\w]+\s*=\s*|echo\s+['"]/i,
             'Go': /^package\s+[\w]+|func\s+\w+\s*\(|import\s+\("[^"]+"\)/m,
@@ -46,24 +46,134 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Return language with highest score, default to JavaScript
-        return Object.entries(scores).reduce((a, b) => b[1] > a[1] ? b : a)[0] || 'JavaScript';
+        const maxScore = Math.max(...Object.values(scores));
+        if (maxScore === 0) return 'JavaScript'; // Default if no matches
+
+        return Object.keys(scores).reduce((a, b) => scores[b] > scores[a] ? b : a);
     }
 
-    function estimateBigO(code, findings, maxNesting) {
+    function estimateBigO(code, findings) {
         let time = 'O(1)';
         let space = 'O(1)';
 
-        const loopCount = findings.filter(f => f.type === 'loop').length;
+        // 1. Calculate Time Complexity via Nested Loops
+        let maxLoopDepth = 0;
+        let currentLoopDepth = 0;
+        const stack = []; // Track scopes: 'loop' or 'other'
 
-        // Time Complexity Heuristics
-        if (maxNesting >= 3) time = 'O(n³)';
-        else if (maxNesting === 2) time = 'O(n²)';
-        else if (loopCount > 0) time = 'O(n)';
+        // Tokenize broadly to find braces and loop keywords
+        // We look for 'for', 'while', '{', '}' and filter out comments in cleanCode
+        const tokens = code.match(/(\bfor\b|\bwhile\b|\bdo\b|\{|\})/g) || [];
 
-        // Space Complexity Heuristics
-        const dataStructures = code.match(/\[\]|new\s+Array|new\s+Map|new\s+Set|\{\}|list\(|dict\(|set\(/g);
-        if (dataStructures && dataStructures.length > 5) space = 'O(n)';
-        else if (dataStructures && dataStructures.length > 2) space = 'O(log n)';
+        for (const token of tokens) {
+            if (token === '{') {
+                stack.push('block');
+            } else if (token === '}') {
+                const scope = stack.pop();
+                if (scope === 'loop') {
+                    currentLoopDepth--;
+                }
+            } else if (['for', 'while', 'do'].includes(token)) {
+                // If we encounter a loop, we assume the NEXT brace opens it
+                // This is a heuristic. A loop usually is followed by { or a single statement.
+                // For simplicity, we assume standard bracing style.
+                // We'll peek at the stack. If we are entering a loop, we increment.
+                // Actually, a better way: When we see 'for', we increment depth temporarily?
+                // No, standard block parsing:
+                // If we see a loop keyword, mark it as 'pending loop'. The next '{' confirms it.
+                stack.push('pending_loop');
+            }
+        }
+
+        // Re-do with a distinct pass for structure
+        // Simplified Logic: 
+        // Track nesting level. When inside a loop, nesting level contributes to complexity.
+
+        let nestingLevel = 0;
+        let loopDepths = [0]; // Stack of loop counts at each nesting level
+        let maxDepth = 0;
+
+        // Clean code is processed, so comments are removed
+        const cleanCode = code
+            .replace(/\/\*[\s\S]*?\*\/|(?:\/\/.*$)/gm, '')
+            .replace(/(["'])(?:(?=(\\?))\2.)*?\1/g, '""');
+
+        const regex = /[{}]|\b(for|while|foreach|map|forEach|reduce|filter)\b/g;
+        let match;
+
+        // Stack to track if the current block is a loop block
+        // 0 = normal block, 1+ = loop block
+        let scopeStack = [0];
+        let currentComplexity = 0;
+
+        while ((match = regex.exec(cleanCode)) !== null) {
+            const token = match[0];
+
+            if (token === '{') {
+                scopeStack.push(0); // Enter new scope
+            } else if (token === '}') {
+                const isLoopScope = scopeStack.pop();
+                if (isLoopScope > 0) {
+                    currentComplexity--;
+                }
+            } else {
+                // It's a loop keyword
+                // We modify the TOP of the stack to indicate this scope IS inside a loop context
+                // But wait, the loop keyword comes BEFORE the brace.
+                // Heuristic: If we see a loop keyword, the NEXT '{' is a loop block.
+                // We set a flag on the top of the stack? No.
+                // We can assume the next '{' starts a loop.
+                scopeStack[scopeStack.length - 1] = 1; // Mark current scope as "expecting loop body"
+            }
+
+            // "Actual" complexity is the sum of loop scopes in the stack
+            // Wait, this is tricky with regex. 
+            // Better approach: nesting level + knowing if we are IN a loop.
+        }
+
+        // Let's use the 'findings' array which already has locations!
+        // Sort findings by line/index.
+        // But tokens are easier.
+
+        // Revised Stack Approach:
+        let activeLoops = 0;
+        let maxActiveLoops = 0;
+        let braceStack = []; // Push true if it's a loop brace, false otherwise.
+        let expectingLoopBrace = false;
+
+        const tokenize = /(\bfor\b|\bwhile\b|\bforeach\b|\bmap\b|\bfilter\b|\bdo\b|\{|\})/g;
+        let m;
+
+        while ((m = tokenize.exec(cleanCode)) !== null) {
+            const t = m[0];
+            if (t === '}' && braceStack.length > 0) {
+                const isLoop = braceStack.pop();
+                if (isLoop) activeLoops--;
+            } else if (t === '{') {
+                if (expectingLoopBrace) {
+                    activeLoops++;
+                    braceStack.push(true);
+                    expectingLoopBrace = false;
+                } else {
+                    braceStack.push(false);
+                }
+                maxActiveLoops = Math.max(maxActiveLoops, activeLoops);
+            } else {
+                // Loop keyword found
+                expectingLoopBrace = true;
+            }
+        }
+
+        if (maxActiveLoops === 0) time = 'O(1)';
+        else if (maxActiveLoops === 1) time = 'O(n)';
+        else if (maxActiveLoops === 2) time = 'O(n²)';
+        else if (maxActiveLoops === 3) time = 'O(n³)';
+        else time = `O(n^${maxActiveLoops})`;
+
+        // Space Complexity
+        const dataStructs = (code.match(/new\s+(Array|Map|Set|List|ArrayList|HashMap)|\[.*\]|\{.*\}/g) || []).length;
+        if (dataStructs > 5) space = 'O(n)';
+        else if (code.includes('recursion') || code.match(/function\s+(\w+).*\1/)) space = 'O(n) (Recursion)';
 
         return { time, space };
     }
@@ -198,7 +308,7 @@ document.addEventListener('DOMContentLoaded', () => {
         );
 
         const errors = validateCode(code, language);
-        const bigO = estimateBigO(code, findings, maxNesting);
+        const bigO = estimateBigO(code, findings);
 
         return { loc, functions: funcCount, conditionals: condCount, loops: loopCount, maxNesting, score, findings, language, errors, bigO };
     }
