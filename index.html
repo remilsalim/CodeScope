@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeTrack | JS Complexity Visualizer</title>
+    <meta name="description" content="Local JavaScript code complexity analyzer using rule-based logic.">
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>CodeTrack</h1>
+            <p class="subtitle">Deep Insight into Code Complexity</p>
+        </header>
+
+        <main>
+            <section class="input-container">
+                <div class="card glass">
+                    <div class="card-header">
+                        <h2>Source Code</h2>
+                        <span class="badge" id="language-badge">JavaScript</span>
+                    </div>
+                    <textarea id="code-input" placeholder="Paste your JavaScript code here..."
+                        spellcheck="false"></textarea>
+                </div>
+            </section>
+
+            <section class="dashboard">
+                <div class="score-card glass">
+                    <h3>Complexity Score</h3>
+                    <div class="score-value" id="total-score">0</div>
+                    <div class="score-label" id="complexity-rank">Wait for Input</div>
+                </div>
+
+                <div class="metrics-grid">
+                    <div class="metric-card glass" id="metric-loc">
+                        <span class="metric-icon">📄</span>
+                        <div class="metric-content">
+                            <span class="metric-value">0</span>
+                            <span class="metric-name">Lines of Code</span>
+                        </div>
+                    </div>
+                    <div class="metric-card glass" id="metric-functions">
+                        <span class="metric-icon">λ</span>
+                        <div class="metric-content">
+                            <span class="metric-value">0</span>
+                            <span class="metric-name">Functions</span>
+                        </div>
+                    </div>
+                    <div class="metric-card glass" id="metric-conditionals">
+                        <span class="metric-icon">⌥</span>
+                        <div class="metric-content">
+                            <span class="metric-value">0</span>
+                            <span class="metric-name">Conditionals</span>
+                        </div>
+                    </div>
+                    <div class="metric-card glass" id="metric-loops">
+                        <span class="metric-icon">↺</span>
+                        <div class="metric-content">
+                            <span class="metric-value">0</span>
+                            <span class="metric-name">Loops</span>
+                        </div>
+                    </div>
+                    <div class="metric-card glass" id="metric-nesting">
+                        <span class="metric-icon">📦</span>
+                        <div class="metric-content">
+                            <span class="metric-value">0</span>
+                            <span class="metric-name">Max Nesting</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <section class="details-container glass">
+            <div class="card-header">
+                <h2>Detailed Insights</h2>
+            </div>
+            <div class="table-wrapper">
+                <table id="details-table">
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Label / Name</th>
+                            <th>Line</th>
+                            <th>Weight</th>
+                        </tr>
+                    </thead>
+                    <tbody id="details-body">
+                        <!-- Populated by JavaScript -->
+                        <tr>
+                            <td colspan="4" style="text-align: center; color: var(--text-secondary); padding: 2rem;">No
+                                data to display. Paste some code to see the breakdown.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <footer>
+            <p>&copy; 2026 CodeTrack Visualizer. All processing occurs locally.</p>
+        </footer>
+    </div>
+    <script src="app.js"></script>
+</body>
+
+</html>
