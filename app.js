@@ -180,22 +180,93 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function validateCode(code, language) {
         const errors = [];
-        if (language === 'JavaScript' && code.trim()) {
+        const lines = code.split('\n');
+
+        // Helper: Check balanced braces/parens
+        function checkBalance(openChar, closeChar, name) {
+            const stack = [];
+            for (let i = 0; i < code.length; i++) {
+                if (code[i] === openChar) stack.push(getLineNumber(code, i));
+                if (code[i] === closeChar) {
+                    if (stack.length === 0) {
+                        errors.push({ message: `Unexpected closing ${name} '${closeChar}'`, line: getLineNumber(code, i) });
+                    } else {
+                        stack.pop();
+                    }
+                }
+            }
+            if (stack.length > 0) {
+                errors.push({ message: `Unclosed ${name} '${openChar}'`, line: stack[0] });
+            }
+        }
+
+        if (language === 'JavaScript') {
             try {
                 new Function(code);
             } catch (e) {
                 let line = 'Unknown';
-                // Try to extract line number from the error message or stack
                 const match = e.stack ? e.stack.match(/<anonymous>:(\d+):(\d+)/) : null;
                 if (match) line = match[1];
+                errors.push({ message: e.message, line: line });
+            }
+        }
+        else if (['Java', 'C++', 'C#', 'PHP', 'Go', 'CSS'].includes(language)) {
+            checkBalance('{', '}', 'brace');
+            checkBalance('(', ')', 'parenthesis');
+            checkBalance('[', ']', 'bracket');
 
-                errors.push({
-                    message: e.message,
-                    line: line
+            // Semicolon check for C-style languages (excluding Go/CSS/blocks)
+            if (['Java', 'C++', 'C#', 'PHP'].includes(language)) {
+                lines.forEach((line, index) => {
+                    const trim = line.trim();
+                    if (trim && !trim.endsWith(';') && !trim.endsWith('{') && !trim.endsWith('}') && !trim.startsWith('//') && !trim.startsWith('/*') && !trim.startsWith('*') && !trim.startsWith('#')) {
+                        // Heuristic: skip if logic likely continues or is a comment
+                        if (!['if', 'for', 'while', 'else', 'switch', 'case', 'default', 'try', 'catch'].some(k => trim.startsWith(k))) {
+                            // Very rough check, might be noisy so we limit it
+                            // errors.push({ message: "Possible missing semicolon", line: index + 1 });
+                        }
+                    }
                 });
             }
         }
-        return errors;
+        else if (language === 'Python') {
+            checkBalance('(', ')', 'parenthesis');
+            checkBalance('[', ']', 'bracket');
+
+            lines.forEach((line, index) => {
+                const trim = line.trim();
+                if ((trim.startsWith('def ') || trim.startsWith('class ') || trim.startsWith('if ') || trim.startsWith('elif ') || trim.startsWith('else') || trim.startsWith('for ') || trim.startsWith('while ')) && !trim.endsWith(':')) {
+                    errors.push({ message: "Expected ':' at end of line", line: index + 1 });
+                }
+            });
+        }
+        else if (language === 'HTML') {
+            const stack = [];
+            const tagRegex = /<\/?(\w+)[^>]*>/g;
+            let match;
+            while ((match = tagRegex.exec(code)) !== null) {
+                const tag = match[1];
+                const isClosing = match[0].startsWith('</');
+                const isSelfClosing = match[0].endsWith('/>') || ['br', 'hr', 'img', 'input', 'meta', 'link'].includes(tag);
+
+                if (isSelfClosing) continue;
+
+                if (isClosing) {
+                    if (stack.length === 0 || stack[stack.length - 1] !== tag) {
+                        errors.push({ message: `Mismatched closing tag </${tag}>`, line: getLineNumber(code, match.index) });
+                    } else {
+                        stack.pop();
+                    }
+                } else {
+                    stack.push(tag);
+                }
+            }
+            if (stack.length > 0) {
+                errors.push({ message: `Unclosed tag <${stack[0]}>`, line: 'Unknown' });
+            }
+        }
+
+        return errors.slice(0, 5); // Limit to top 5 errors to avoid spam
     }
 
     function analyzeCode(code) {
